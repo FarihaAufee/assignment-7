@@ -63,7 +63,7 @@ const Navbar = () => {
     const fetchCategories = async () => {
       try {
         const response = await fetch(
-          "https://api.api-store.workers.dev/api/bazardor/categories"
+          "https://api.abcz.workers.dev/api/bazardor/categories"
         );
 
         if (!response.ok) {

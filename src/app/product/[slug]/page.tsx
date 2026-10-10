@@ -1,14 +1,17 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { authClient } from "@/lib/auth-client";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import Image from "next/image";
+import { authClient } from "@/lib/auth-client";
 import {
   FaMagnifyingGlass,
   FaArrowTrendUp,
   FaArrowTrendDown,
+  FaBoxOpen,
+  FaRotateRight,
 } from "react-icons/fa6";
 
 interface Market {
@@ -38,135 +41,239 @@ interface Product {
   markets: Market[];
 }
 
-const ProductDetails = () => {
-  const params = useParams();
-  const slug = params.slug as string;
+const API_URL =
+  "https://api.abcz.workers.dev/api/bazardor/products";
+
+const money = (value: number) =>
+  Number(value || 0).toLocaleString("bn-BD");
+
+export default function ProductDetails() {
+  const params = useParams<{ slug: string }>();
+  const router = useRouter();
+
+  const slug = Array.isArray(params.slug)
+    ? params.slug[0]
+    : params.slug;
+
+  const { data: session, isPending } =
+    authClient.useSession();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
-const router = useRouter();
-
-const { data: session, isPending } = authClient.useSession();
-
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    const fetchProduct = async () => {
+    if (isPending) return;
+
+    if (!session?.user) {
+      router.replace(
+        `/signin?callbackURL=${encodeURIComponent(
+          `/product/${slug}`
+        )}`
+      );
+    }
+  }, [isPending, session, router, slug]);
+
+  useEffect(() => {
+    if (!slug || isPending || !session?.user) return;
+
+    let cancelled = false;
+
+    async function loadProduct() {
+      setLoading(true);
+      setError("");
+      setProduct(null);
+
       try {
-        const res = await fetch(
-          `https://api.abcz.workers.dev/api/bazardor/products/${slug}`,
-          {
-            cache: "no-store",
-          }
+        let found: Product | null = null;
+
+        // Try the single-product API first.
+        const response = await fetch(
+          `${API_URL}/${encodeURIComponent(slug)}`,
+          { cache: "no-store" }
         );
 
-        if (!res.ok) {
-          throw new Error("Failed to fetch product");
+        if (response.ok) {
+          const result = await response.json();
+
+          const candidate =
+            result?.product ??
+            result?.data?.product ??
+            result?.data ??
+            result;
+
+          if (
+            candidate &&
+            !Array.isArray(candidate) &&
+            typeof candidate === "object" &&
+            String(candidate.slug) === slug
+          ) {
+            found = candidate as Product;
+          }
         }
 
-        const data: Product = await res.json();
+        // If necessary, search the complete product list.
+        if (!found) {
+          const listResponse = await fetch(API_URL, {
+            cache: "no-store",
+          });
 
-        setProduct(data);
-      } catch (error) {
-        console.error("Error fetching product:", error);
-        setProduct(null);
+          if (!listResponse.ok) {
+            throw new Error(
+              `Products API error: ${listResponse.status}`
+            );
+          }
+
+          const result = await listResponse.json();
+
+          const list = Array.isArray(result)
+            ? result
+            : Array.isArray(result?.data)
+              ? result.data
+              : Array.isArray(result?.products)
+                ? result.products
+                : [];
+
+          found =
+            list.find(
+              (item: Product) =>
+                String(item.slug) === slug
+            ) ?? null;
+        }
+
+        if (!cancelled) {
+          if (found) {
+            setProduct({
+              ...found,
+              today: Number(found.today) || 0,
+              yesterday: Number(found.yesterday) || 0,
+              change: found.change ?? {
+                dir: "down",
+                pct: 0,
+              },
+              markets: Array.isArray(found.markets)
+                ? found.markets
+                : [],
+            });
+          } else {
+            setError(
+              "এই পণ্যটি API-তে পাওয়া যায়নি।"
+            );
+          }
+        }
+      } catch (err) {
+        console.error("Product loading error:", err);
+
+        if (!cancelled) {
+          setError(
+            "পণ্যের তথ্য লোড করা যায়নি। আবার চেষ্টা করো।"
+          );
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
-    };
-
-    if (slug) {
-      fetchProduct();
     }
-  }, [slug]);
-useEffect(() => {
-  if (!isPending && !session?.user) {
-    router.replace(`/signin?callbackURL=${encodeURIComponent(`/product/${slug}`)}`);
-  }
-}, [isPending, session, router, slug]);
 
-if (isPending || (!session?.user && slug)) {
-  return (
-    <main className="min-h-screen bg-[#f5f8f5] px-4 py-10">
-      <div className="mx-auto max-w-6xl animate-pulse space-y-4">
-        <div className="h-8 w-1/3 rounded bg-gray-200" />
-        <div className="h-64 rounded-2xl bg-gray-200" />
-      </div>
-    </main>
-  );
-}
-  // Loading
+    loadProduct();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, isPending, session]);
+
+  if (isPending || !session?.user) {
+    return (
+      <main className="min-h-screen bg-[#f5f8f5] p-6">
+        <div className="mx-auto max-w-6xl animate-pulse space-y-4">
+          <div className="h-8 w-48 rounded bg-gray-200" />
+          <div className="h-72 rounded-2xl bg-gray-200" />
+        </div>
+      </main>
+    );
+  }
+
   if (loading) {
     return (
-      <main className="min-h-screen bg-[#f5f8f5]">
-        <div className="container mx-auto px-4 py-10">
-          <div className="grid animate-pulse gap-8 md:grid-cols-2">
-            <div className="h-80 rounded-2xl bg-gray-200" />
-
-            <div className="space-y-4">
-              <div className="h-8 w-2/3 rounded bg-gray-200" />
-              <div className="h-5 w-1/3 rounded bg-gray-200" />
-              <div className="h-20 rounded bg-gray-200" />
-              <div className="h-12 rounded bg-gray-200" />
-            </div>
+      <main className="min-h-screen bg-[#f5f8f5] px-4 py-10">
+        <div className="mx-auto grid max-w-6xl animate-pulse gap-8 md:grid-cols-2">
+          <div className="h-80 rounded-2xl bg-gray-200" />
+          <div className="space-y-4">
+            <div className="h-8 w-2/3 rounded bg-gray-200" />
+            <div className="h-5 w-1/3 rounded bg-gray-200" />
+            <div className="h-20 rounded bg-gray-200" />
           </div>
         </div>
       </main>
     );
   }
 
-  // Product not found
-  if (!product) {
+  if (error || !product) {
     return (
-      <main className="min-h-screen bg-[#f5f8f5]">
-        <div className="container mx-auto px-4 py-20 text-center">
-          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-gray-100">
-            <FaMagnifyingGlass className="text-3xl text-gray-400" />
-          </div>
+      <main className="flex min-h-screen items-center justify-center bg-[#f5f8f5] px-4">
+        <div className="max-w-md text-center">
+          <FaMagnifyingGlass className="mx-auto text-5xl text-gray-400" />
 
           <h1 className="mt-5 text-2xl font-bold text-gray-900">
-            পণ্যটি পাওয়া যায়নি
+            {product ? "সমস্যা হয়েছে" : "পণ্যটি পাওয়া যায়নি"}
           </h1>
 
-          <p className="mt-2 text-gray-500">
-            আপনি যে পণ্যটি খুঁজছেন সেটি বর্তমানে পাওয়া যাচ্ছে না।
+          <p className="mt-3 text-gray-500">
+            {error || "আপনি যে পণ্যটি খুঁজছেন সেটি পাওয়া যায়নি।"}
           </p>
 
-          <Link
-            href="/"
-            className="mt-6 inline-flex items-center rounded-lg bg-green-600 px-5 py-2.5 font-medium text-white transition hover:bg-green-700"
-          >
-            হোম পেজে ফিরে যান
-          </Link>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <button
+              onClick={() => window.location.reload()}
+              className="inline-flex items-center gap-2 rounded-lg bg-green-600 px-5 py-2.5 text-white hover:bg-green-700"
+            >
+              <FaRotateRight />
+              আবার চেষ্টা করো
+            </button>
+
+            <Link
+              href="/"
+              className="rounded-lg border border-gray-300 bg-white px-5 py-2.5 text-gray-700 hover:bg-gray-50"
+            >
+              হোম পেজে ফিরে যান
+            </Link>
+          </div>
         </div>
       </main>
     );
   }
 
-  const marketPrices = product.markets.flatMap((market) => [
-    market.min,
-    market.max,
-  ]);
+  const markets = product.markets;
 
-  const minPrice =
-    marketPrices.length > 0 ? Math.min(...marketPrices) : product.today;
+  const prices = markets.flatMap((market) => [
+    Number(market.min),
+    Number(market.max),
+  ]).filter(Number.isFinite);
 
-  const maxPrice =
-    marketPrices.length > 0 ? Math.max(...marketPrices) : product.today;
+  const minPrice = prices.length
+    ? Math.min(...prices)
+    : product.today;
 
-  const averagePrice =
-    marketPrices.length > 0
-      ? marketPrices.reduce((sum, price) => sum + price, 0) /
-        marketPrices.length
-      : product.today;
+  const maxPrice = prices.length
+    ? Math.max(...prices)
+    : product.today;
+
+  const averagePrice = prices.length
+    ? prices.reduce((sum, price) => sum + price, 0) /
+      prices.length
+    : product.today;
 
   const isRising = product.change.dir === "up";
 
+  const isRemoteImage =
+    /^https?:\/\//i.test(product.image || "");
+
   return (
     <main className="min-h-screen bg-[#f5f8f5]">
-      <div className="container mx-auto px-4 py-10">
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+
         {/* Breadcrumb */}
-        <div className="mb-6 text-sm text-gray-500">
-          <Link href="/" className="transition hover:text-green-600">
+        <nav className="mb-6 text-sm text-gray-500">
+          <Link href="/" className="hover:text-green-600">
             হোম
           </Link>
 
@@ -174,34 +281,41 @@ if (isPending || (!session?.user && slug)) {
 
           <Link
             href={`/category/${product.category}`}
-            className="transition hover:text-green-600"
+            className="hover:text-green-600"
           >
             {product.categoryNameBn}
           </Link>
 
           <span className="mx-2">/</span>
-
           <span>{product.nameBn}</span>
-        </div>
+        </nav>
 
-        {/* Product Summary */}
-        <div className="grid gap-8 md:grid-cols-2">
+        {/* Product information */}
+        <section className="grid gap-8 md:grid-cols-2">
+
           {/* Image */}
-          <div className="flex min-h-[320px] items-center justify-center rounded-2xl bg-white shadow-sm">
-            <span className="text-8xl">{product.image}</span>
+          <div className="relative flex min-h-[320px] items-center justify-center overflow-hidden rounded-2xl bg-white p-8 shadow-sm">
+            {isRemoteImage ? (
+              <Image
+                src={product.image}
+                alt={product.nameBn}
+                fill
+                unoptimized
+                sizes="(max-width: 768px) 100vw, 50vw"
+                className="object-contain p-8"
+              />
+            ) : (
+              <div className="text-8xl">
+                {product.image || <FaBoxOpen />}
+              </div>
+            )}
           </div>
 
           {/* Details */}
           <div>
-            <div className="mb-3 flex items-center gap-2">
-              <span className="text-2xl">
-                {product.categoryIcon}
-              </span>
-
-              <span className="text-sm text-gray-500">
-                {product.categoryNameBn}
-              </span>
-            </div>
+            <p className="mb-3 text-sm text-gray-500">
+              {product.categoryIcon} {product.categoryNameBn}
+            </p>
 
             <h1 className="text-3xl font-bold text-gray-900">
               {product.nameBn}
@@ -211,113 +325,103 @@ if (isPending || (!session?.user && slug)) {
               প্রতি {product.unit}
             </p>
 
-            {/* Today's Price */}
             <div className="mt-6 flex flex-wrap items-center gap-4">
               <p className="text-4xl font-bold text-gray-900">
-                {product.today.toLocaleString("bn-BD")} ৳
+                ৳{money(product.today)}
               </p>
 
               <span
-                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold ${
+                className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold ${
                   isRising
-                    ? "bg-green-50 text-green-600"
-                    : "bg-red-50 text-red-500"
+                    ? "bg-green-50 text-green-700"
+                    : "bg-red-50 text-red-600"
                 }`}
               >
                 {isRising ? (
-                  <FaArrowTrendUp className="text-sm" />
+                  <FaArrowTrendUp />
                 ) : (
-                  <FaArrowTrendDown className="text-sm" />
+                  <FaArrowTrendDown />
                 )}
 
-                {product.change.pct.toLocaleString("bn-BD")}%
+                {money(product.change.pct)}%
               </span>
             </div>
 
-            <p className="mt-2 text-sm text-gray-500">
-              গতকাল: {product.yesterday.toLocaleString("bn-BD")} ৳
+            <p className="mt-3 text-sm text-gray-500">
+              গতকালের দাম: ৳{money(product.yesterday)}
             </p>
 
-            {/* Price History */}
+            {/* Price summary */}
             <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <div className="rounded-xl bg-white p-4 shadow-sm">
-                <p className="text-xs text-gray-500">
-                  সর্বনিম্ন
-                </p>
+              {[
+                { label: "সর্বনিম্ন দাম", value: minPrice },
+                { label: "সর্বোচ্চ দাম", value: maxPrice },
+                {
+                  label: "গড় দাম",
+                  value: Math.round(averagePrice),
+                },
+              ].map((item) => (
+                <div
+                  key={item.label}
+                  className="rounded-xl bg-white p-4 shadow-sm"
+                >
+                  <p className="text-xs text-gray-500">
+                    {item.label}
+                  </p>
 
-                <p className="mt-1 text-lg font-bold text-gray-900">
-                  {minPrice.toLocaleString("bn-BD")} ৳
-                </p>
-              </div>
-
-              <div className="rounded-xl bg-white p-4 shadow-sm">
-                <p className="text-xs text-gray-500">
-                  সর্বোচ্চ
-                </p>
-
-                <p className="mt-1 text-lg font-bold text-gray-900">
-                  {maxPrice.toLocaleString("bn-BD")} ৳
-                </p>
-              </div>
-
-              <div className="rounded-xl bg-white p-4 shadow-sm">
-                <p className="text-xs text-gray-500">
-                  গড় দাম
-                </p>
-
-                <p className="mt-1 text-lg font-bold text-gray-900">
-                  {Math.round(averagePrice).toLocaleString("bn-BD")} ৳
-                </p>
-              </div>
+                  <p className="mt-2 text-lg font-bold text-gray-900">
+                    ৳{money(item.value)}
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* Market Prices */}
+        {/* Market prices */}
         <section className="mt-12">
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">
-              বাজারভিত্তিক দাম
-            </h2>
+          <h2 className="text-2xl font-bold text-gray-900">
+            বাজারভিত্তিক দাম
+          </h2>
 
-            <p className="mt-1 text-sm text-gray-500">
-              বিভিন্ন বাজারে আজকের {product.nameBn}-এর দাম
-            </p>
-          </div>
+          <p className="mt-2 text-sm text-gray-500">
+            বিভিন্ন বাজারে আজকের {product.nameBn}-এর দাম
+          </p>
 
-          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-            {/* Table Header */}
-            <div className="grid grid-cols-3 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-700">
+          <div className="mt-5 overflow-x-auto rounded-xl border border-gray-200 bg-white">
+            <div className="grid min-w-[480px] grid-cols-3 bg-gray-50 px-4 py-3 text-sm font-semibold text-gray-700">
               <span>বাজার</span>
               <span>বিভাগ</span>
               <span>দাম</span>
             </div>
 
-            {/* Market Data */}
-            {product.markets.map((market, index) => (
-              <div
-                key={`${market.market}-${index}`}
-                className="grid grid-cols-3 items-center border-t border-gray-200 px-4 py-4 text-sm"
-              >
-                <span className="font-medium text-gray-900">
-                  {market.market}
-                </span>
+            {markets.length > 0 ? (
+              markets.map((market, index) => (
+                <div
+                  key={`${market.market}-${index}`}
+                  className="grid min-w-[480px] grid-cols-3 items-center border-t border-gray-100 px-4 py-4 text-sm"
+                >
+                  <span className="font-medium text-gray-900">
+                    {market.market}
+                  </span>
 
-                <span className="text-gray-500">
-                  {market.division}
-                </span>
+                  <span className="text-gray-500">
+                    {market.division}
+                  </span>
 
-                <span className="font-semibold text-gray-900">
-                  {market.min.toLocaleString("bn-BD")} –{" "}
-                  {market.max.toLocaleString("bn-BD")} ৳
-                </span>
-              </div>
-            ))}
+                  <span className="font-semibold text-gray-900">
+                    ৳{money(market.min)} – ৳{money(market.max)}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="p-6 text-center text-gray-500">
+                বাজারভিত্তিক দামের তথ্য এখন পাওয়া যাচ্ছে না।
+              </p>
+            )}
           </div>
         </section>
       </div>
     </main>
   );
-};
-
-export default ProductDetails;
+}
