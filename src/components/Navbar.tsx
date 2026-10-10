@@ -58,7 +58,6 @@ const Navbar = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // ================= GET CATEGORIES =================
   useEffect(() => {
     const fetchCategories = async () => {
       try {
