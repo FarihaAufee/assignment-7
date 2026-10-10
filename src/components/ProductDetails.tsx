@@ -125,7 +125,7 @@ export default function ProductDetails({ product }: Props) {
               </p>
 
               <p className="mt-2 text-xs text-gray-500">
-                বাংলাদেশের বিভিন্ন বাজারের আজকের দাম
+                বাংলাদেশের বিভিন্ন বাজারের আজকের দাম \
               </p>
             </div>
           </div>
