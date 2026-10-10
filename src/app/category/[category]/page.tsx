@@ -41,7 +41,7 @@ export default function CategoryPage() {
         setError(false);
 
         const res = await fetch(
-          `https://api.abcz.workers.dev/api/bazardor/products?category=${encodeURIComponent(category)}`,
+          `https://openapi.programming-hero.com/api/bazardor/products?category=${encodeURIComponent(category)}`,
           { signal: controller.signal }
         );
 

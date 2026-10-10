@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -29,7 +28,7 @@ const AllProducts = () => {
     const fetchProducts = async () => {
       try {
         const response = await fetch(
-          "https://api.abcz.workers.dev/api/bazardor/products",
+          "https://openapi.programming-hero.com/api/bazardor/products",
           {
             cache: "no-store",
             signal: controller.signal,

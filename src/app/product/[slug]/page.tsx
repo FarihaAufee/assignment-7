@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import { Suspense } from "react";
 import { authClient } from "@/lib/auth-client";
 import {
   FaMagnifyingGlass,
@@ -47,7 +48,7 @@ const API_URL =
 const money = (value: number) =>
   Number(value || 0).toLocaleString("bn-BD");
 
-export default function ProductDetails() {
+function ProductDetailsContent() {
   const params = useParams<{ slug: string }>();
   const router = useRouter();
 
@@ -423,5 +424,18 @@ export default function ProductDetails() {
         </section>
       </div>
     </main>
+  ); 
+}
+export default function ProductDetailsPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-[#f5f8f5]">
+          <p className="text-gray-500">লোড হচ্ছে...</p>
+        </main>
+      }
+    >
+      <ProductDetailsContent />
+    </Suspense>
   );
 }

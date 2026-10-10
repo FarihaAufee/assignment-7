@@ -17,7 +17,7 @@ const PriceMarquee = () => {
     const fetchCategories = async () => {
       try {
         const response = await fetch(
-          "https://api.abcz.workers.dev/api/bazardor/categories",
+          "https://openapi.programming-hero.com/api/bazardor/categories",
           {
             cache: "no-store",
           }
