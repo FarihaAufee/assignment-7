@@ -40,10 +40,10 @@ export default function CategoryPage() {
         setLoading(true);
         setError(false);
 
-        const res = await fetch(
-          `https://openapi.programming-hero.com/api/bazardor/products?category=${encodeURIComponent(category)}`,
-          { signal: controller.signal }
-        );
+       const res = await fetch(
+  `https://api.abcz.workers.dev/api/bazardor/products?category=${encodeURIComponent(category)}`,
+  { signal: controller.signal }
+);
 
         if (!res.ok) {
           throw new Error("Failed to fetch products");
@@ -182,11 +182,26 @@ export default function CategoryPage() {
             >
               <div className="flex h-36 items-center justify-center overflow-hidden rounded-lg bg-gray-50">
                 {product.image ? (
-                  <img
-                    src={product.image}
-                    alt={product.nameBn}
-                    className="h-full w-full object-cover"
-                  />
+                  
+<div className="flex h-36 items-center justify-center overflow-hidden rounded-lg bg-gray-50">
+  {product.image &&
+  (product.image.startsWith("http://") ||
+    product.image.startsWith("https://")) ? (
+    <img
+      src={product.image}
+      alt={product.nameBn}
+      className="h-full w-full object-contain"
+      onError={(e) => {
+        e.currentTarget.style.display = "none";
+      }}
+    />
+  ) : (
+    <span className="text-6xl">
+      {product.image || product.categoryIcon || "🛒"}
+    </span>
+  )}
+</div>
+
                 ) : (
                   <span className="text-6xl">{categoryIcon || "🛒"}</span>
                 )}

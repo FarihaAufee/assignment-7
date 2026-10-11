@@ -79,7 +79,6 @@ const Navbar = () => {
     fetchCategories();
   }, []);
 
-  // ================= SIGN OUT =================
   const handleSignOut = async () => {
     setIsSigningOut(true);
 
